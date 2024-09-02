@@ -4,7 +4,7 @@ import * as canvas from 'canvas';
 import * as fs from 'fs';
 import * as path from 'path';
 import axios from 'axios';
-import * as ffmpeg from 'fluent-ffmpeg';
+import ffmpeg from 'fluent-ffmpeg';
 import { createCanvas, loadImage } from 'canvas';
 import { createWriteStream, unlink } from 'fs';
 
@@ -23,7 +23,8 @@ import { UserService } from 'src/iam/application/services/user.service';
 import { STATUS } from 'src/iam/domain/constants/status.contstant';
 const { Canvas, Image, ImageData } = canvas;
 faceapi.env.monkeyPatch({ Canvas, Image, ImageData } as any);
-const ffmpegPath = 'C:\\ffmpeg\\bin\\ffmpeg.exe';
+const ffmpegPath = require('ffmpeg-static');
+
 @Injectable()
 export class RecognitionService {
   private readonly logger = new Logger(RecognitionService.name);
