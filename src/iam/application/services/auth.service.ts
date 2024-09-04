@@ -14,6 +14,11 @@ import { LoginDto } from '../dtos/user/login.dto';
 import { JwtPayload } from 'src/iam/domain/interfaces/jwt-payload.interface';
 import { STATUS } from 'src/iam/domain/constants/status.contstant';
 import { Profile } from 'src/iam/domain/entities/profile.entity';
+import { join } from 'path';
+import { writeFileSync } from 'fs';
+import { tmpdir } from 'os';
+import { generateUUID } from 'src/shared/utils/generators.util';
+import { CloudinaryService } from 'src/shared/cloudinary/cloudinary.service';
 
 @Injectable()
 export class AuthService {
@@ -23,19 +28,33 @@ export class AuthService {
     @InjectRepository(Profile)
     private profileRepository: Repository<Profile>,
     private readonly jwtService: JwtService,
+    private cloudinaryService: CloudinaryService,
   ) {}
 
-  async create(createUserDto: CreateUserDto) {
+  async create(createUserDto: CreateUserDto, imageProfile: Buffer | null) {
     try {
       const { profile, password, userName, roles, email } = createUserDto;
 
       //  console.log(profile);
       const passwordBcrypt = bcrypt.hashSync(password, 10);
 
+      let imageUrl = '';
+      let logoID = '';
+      if (imageProfile) {
+        const tempFilePath = join(tmpdir(), profile.fullName);
+        writeFileSync(tempFilePath, imageProfile);
+
+        logoID = generateUUID();
+        imageUrl = await this.cloudinaryService.uploadFile({
+          tempFilePath,
+          logoID,
+        });
+      }
+
       const auxProfile = {
         fullName: profile.fullName,
-        imageUrl: '',
-        imageId: '',
+        imageUrl: imageUrl,
+        imageId: logoID,
         status: STATUS.unverified,
       };
       await this.profileRepository.save(auxProfile);

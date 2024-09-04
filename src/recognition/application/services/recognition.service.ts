@@ -1,3 +1,5 @@
+//import '@tensorflow/tfjs-node';
+
 import { Injectable, Logger } from '@nestjs/common';
 import * as faceapi from 'face-api.js';
 import * as canvas from 'canvas';
@@ -21,6 +23,7 @@ import { NotificationService } from 'src/notifications/application/services/noti
 import { UserService } from 'src/iam/application/services/user.service';
 //import { Profile } from 'src/iam/domain/entities/profile.entity';
 import { STATUS } from 'src/iam/domain/constants/status.contstant';
+import { FaceRecognitionGateway } from 'src/shared/websocket/websocket.gateway';
 const { Canvas, Image, ImageData } = canvas;
 faceapi.env.monkeyPatch({ Canvas, Image, ImageData } as any);
 const ffmpegPath = require('ffmpeg-static');
@@ -44,6 +47,7 @@ export class RecognitionService {
     //private readonly profileRepository: Repository<Profile>,
     private readonly notificationService: NotificationService,
     private readonly cloudinaryService: CloudinaryService,
+    private readonly gateway: FaceRecognitionGateway,
   ) {
     ffmpeg.setFfmpegPath(ffmpegPath);
     this.loadModels()
@@ -67,39 +71,59 @@ export class RecognitionService {
   async addFaceToModel(
     userId: number,
     name: string,
-    imageBuffer: Buffer | null,
+    //imageBuffer: Buffer | null,
+    frontalimageBuffer: Buffer | null,
+    rightProfileBuffer: Buffer | null,
+    leftProfileBuffer: Buffer | null,
+    fromAboveBuffer: Buffer | null,
   ) {
     try {
-      const image: any = await canvas.loadImage(imageBuffer);
-
       const user = await this.userService.getUserById(userId);
       if (!user) throw new Error('User not found');
 
-      const detections = await faceapi
-        .detectAllFaces(image)
-        .withFaceLandmarks()
-        .withFaceDescriptors();
+      const buffers = [
+        frontalimageBuffer,
+        rightProfileBuffer,
+        leftProfileBuffer,
+        fromAboveBuffer,
+      ];
+      const loadAndDetect = async (buffer: Buffer | null) => {
+        if (buffer) {
+          const image: any = await loadImage(buffer);
+          const detections = await faceapi
+            .detectAllFaces(image)
+            .withFaceLandmarks()
+            .withFaceDescriptors();
+          return detections.length > 0 ? detections[0].descriptor : null;
+        }
+        return null;
+      };
 
-      if (detections.length > 0) {
+      const descriptors = await Promise.all(buffers.map(loadAndDetect));
+      const validDescriptors = descriptors.filter(
+        (desc) => desc !== null,
+      ) as Float32Array[];
+
+      if (validDescriptors.length > 0) {
         const existingDescriptorIndex = this.labeledDescriptors.findIndex(
           (desc) => desc.label === userId.toString(),
         );
 
         if (existingDescriptorIndex !== -1) {
           this.labeledDescriptors[existingDescriptorIndex].descriptors.push(
-            detections[0].descriptor,
+            ...validDescriptors,
           );
         } else {
           const labeledFaceDescriptors = new faceapi.LabeledFaceDescriptors(
             userId.toString(),
-            [detections[0].descriptor],
+            validDescriptors,
           );
 
           this.labeledDescriptors.push(labeledFaceDescriptors);
         }
         this.recognizer = new faceapi.FaceMatcher(this.labeledDescriptors);
 
-        this.registeredFaceRepository.update(
+        await this.registeredFaceRepository.update(
           {
             id: user.face.id,
           },
@@ -115,7 +139,23 @@ export class RecognitionService {
     }
   }
 
-  async saveFace(name: string, imageBuffer: Buffer | null, userID: number) {
+  /*
+    frontal?.buffer ?? null,
+      rightProfile?.buffer ?? null,
+      leftProfile?.buffer ?? null,
+      fromAbove?.buffer ?? null,
+  */
+
+  async saveFace(
+    name: string,
+    //imageBuffer: Buffer | null,
+    frontalimageBuffer: Buffer | null,
+    rightProfileBuffer: Buffer | null,
+    leftProfileBuffer: Buffer | null,
+    fromAboveBuffer: Buffer | null,
+
+    userID: number,
+  ) {
     try {
       //if (!imageBuffer) throw new Error('No image buffer provided');
       if (!name) throw new Error('No name provided');
@@ -124,16 +164,16 @@ export class RecognitionService {
 
       let imageUrl = '';
       let logoID = '';
-      if (imageBuffer) {
-        const tempFilePath = join(tmpdir(), name);
-        writeFileSync(tempFilePath, imageBuffer);
+      // if (imageBuffer) {
+      //   const tempFilePath = join(tmpdir(), name);
+      //   writeFileSync(tempFilePath, imageBuffer);
 
-        logoID = generateUUID();
-        imageUrl = await this.cloudinaryService.uploadFile({
-          tempFilePath,
-          logoID,
-        });
-      }
+      //   logoID = generateUUID();
+      //   imageUrl = await this.cloudinaryService.uploadFile({
+      //     tempFilePath,
+      //     logoID,
+      //   });
+      // }
 
       const status = !imageUrl ? STATUS.unverified : STATUS.verified;
 
@@ -142,9 +182,24 @@ export class RecognitionService {
         imageId: logoID ?? '',
         imageUrl: imageUrl ? imageUrl : '',
         labeledDescriptors: '',
+        frontalFace: '',
+        rightProfileFace: '',
+        leftProfileFace: '',
+        fromAboveFace: '',
         status: status,
       };
 
+      /*
+       frontalFace: string;
+        @Column('longtext')
+        rightProfileFace: string;
+
+      @Column('longtext')
+      leftProfileFace: string;
+
+      @Column('longtext')
+      fromAboveFace: string;
+      */
       const registeredFace = this.registeredFaceRepository.create({
         ...auxRegisteredFace,
       });
@@ -156,7 +211,11 @@ export class RecognitionService {
       const labeledDescriptors = await this.addFaceToModel(
         userID,
         name,
-        imageBuffer,
+        //imageBuffer,
+        frontalimageBuffer,
+        rightProfileBuffer,
+        leftProfileBuffer,
+        fromAboveBuffer,
       );
 
       let profile = user.profile;
@@ -300,6 +359,52 @@ export class RecognitionService {
         .save('testing.mp4');
     } catch (error) {
       this.logger.error(`Failed to stream video: ${error.message}`);
+    }
+  }
+
+  async processVideo(streamURL: string): Promise<void> {
+    try {
+      ffmpeg(streamURL)
+        .outputOptions('-f', 'image2pipe')
+        .outputOptions('-vcodec', 'mjpeg')
+        .outputOptions('-vf', 'fps=0.5')
+        .on('start', (commandLine) => {
+          this.logger.log(`Spawned Ffmpeg with command: ${commandLine}`);
+        })
+        .pipe()
+        .on('data', async (chunk) => {
+          const img = new Image();
+
+          img.onload = async () => {
+            const cnvs: any = createCanvas(img.width, img.height);
+            const ctx = cnvs.getContext('2d');
+            ctx.drawImage(img, 0, 0, img.width, img.height);
+
+            console.time('detection');
+            const detections = await faceapi
+              .detectAllFaces(cnvs)
+              .withFaceLandmarks()
+              .withFaceDescriptors();
+            console.timeEnd('detection');
+
+            detections.length
+              ? console.log('Face detected')
+              : console.log('No face detected');
+            //this.gateway.sendDetectionResult(detections);
+          };
+
+          img.onerror = (err) => {
+            console.error('Error loading image:', err.message);
+          };
+
+          const base64Data = chunk.toString('base64');
+          img.src = `data:image/jpeg;base64,${base64Data}`;
+        })
+        .on('error', (err) => {
+          console.error('Error processing video:', err);
+        });
+    } catch (error) {
+      console.error('Error processing video:', error.message);
     }
   }
 }

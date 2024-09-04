@@ -4,7 +4,9 @@ import {
   Get,
   Post,
   Req,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
   UsePipes,
   ValidationPipe,
 } from '@nestjs/common';
@@ -14,6 +16,8 @@ import { ApiTags } from '@nestjs/swagger';
 import { CreateUserDto } from 'src/iam/application/dtos/user/create-user.dto';
 import { AuthService } from 'src/iam/application/services/auth.service';
 import { LoginDto } from 'src/iam/application/dtos/user/login.dto';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { CreateProfileDto } from 'src/iam/application/dtos/profile/create-profile.dto';
 
 @UsePipes(
   new ValidationPipe({
@@ -27,8 +31,29 @@ export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Post('register')
-  createUser(@Body() createUserDto: CreateUserDto) {
-    return this.authService.create(createUserDto);
+  @UseInterceptors(FileInterceptor('file'))
+  createUser(
+    @UploadedFile() file: Express.Multer.File,
+    @Body('userName') userName: string,
+    @Body('email') email: string,
+    @Body('password') password: string,
+    @Body('roles') roles: string,
+    @Body('fullName') fullName: string,
+    //@Body() createUserDto: CreateUserDto
+  ) {
+    const createUserDto = new CreateUserDto();
+    const rolesArray = roles.split(',');
+    
+    createUserDto.email = email;
+    createUserDto.userName = userName;
+    createUserDto.password = password;
+    createUserDto.roles = rolesArray;
+
+    const createProfileDto = new CreateProfileDto();
+    createProfileDto.fullName = fullName;
+    createUserDto.profile = createProfileDto;
+
+    return this.authService.create(createUserDto, file.buffer ?? null);
   }
 
   @Post('login')

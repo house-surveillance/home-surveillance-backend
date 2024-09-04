@@ -11,10 +11,11 @@ import { User } from './domain/entities/user.entity';
 
 import { Profile } from './domain/entities/profile.entity';
 import { UserService } from './application/services/user.service';
+import { CloudinaryService } from 'src/shared/cloudinary/cloudinary.service';
 
 @Module({
   controllers: [UsersController, AuthController],
-  providers: [AuthService, UserService, JwtStrategy],
+  providers: [AuthService, UserService, JwtStrategy, CloudinaryService],
   imports: [
     ConfigModule,
     TypeOrmModule.forFeature([User, Profile]),

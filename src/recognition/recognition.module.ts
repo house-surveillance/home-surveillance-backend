@@ -9,12 +9,14 @@ import { NotificationService } from 'src/notifications/application/services/noti
 import { NotificationsModule } from 'src/notifications/notifications.module';
 import { IamModule } from 'src/iam/iam.module';
 import { UserService } from 'src/iam/application/services/user.service';
+import { SharedModule } from 'src/shared/shared.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([RegisteredFace]),
     NotificationsModule,
     IamModule,
+    SharedModule
   ],
   controllers: [RecognitionController],
   providers: [RecognitionService, CloudinaryService, UserService],

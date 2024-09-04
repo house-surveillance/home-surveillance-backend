@@ -11,7 +11,11 @@ export class NotificationService {
   ) {}
 
   async getAll() {
-    return this.notificationRepository.find();
+    return this.notificationRepository.find({
+      order: {
+        timestamp: 'DESC',
+      },
+    });
   }
 
   async create(notification: Notification) {
