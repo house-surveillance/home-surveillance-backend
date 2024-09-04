@@ -239,7 +239,7 @@ export class RecognitionService {
   async recognizeFace(imageBuffer: Buffer) {
     try {
       // Paso 1: Obtener usuarios de la base de datos
-      const faces = await this.registeredFaceRepository.find(); // Implementa esta función según tu base de datos
+      const faces = await this.registeredFaceRepository.find();
 
       // Paso 2: Cargar labeledDescriptors en FaceMatcher
       if (!this.recognizer) {
