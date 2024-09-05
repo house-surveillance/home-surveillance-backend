@@ -46,31 +46,8 @@ export class RecognitionController {
       fromAbove: fromAbove?.buffer ?? null,
     };
 
-    return this.recognitionService.saveFace(
-      registerFaceDto,
-      //file?.buffer ?? null,
-      imagesBuffer,
-    );
+    return this.recognitionService.saveFace(registerFaceDto, imagesBuffer);
   }
-
-  // @Post('add-face-to-model')
-  // @UseInterceptors(FileInterceptor('file'))
-  // async addFace(
-  //   @Body('name') name: string,
-  //   @Body('userId') userId: number,
-  //   @UploadedFile() file: Express.Multer.File,
-  // ) {
-  //   return this.recognitionService.addFaceToModel(userId, name, file?.buffer);
-  // }
-
-  // @Post('recognize-face')
-  // @UseInterceptors(FileInterceptor('file'))
-  // async recognizeFace(@UploadedFile() file: Express.Multer.File) {
-  //   const prediction = await this.recognitionService.recognizeFace(file.buffer);
-  //   return prediction
-  //     ? { label: prediction.label, distance: prediction.distance }
-  //     : { message: 'No face recognized' };
-  // }
 
   @Post('process-ip-camera')
   async processIPCameraStream(@Body('streamURL') streamURL: string) {
