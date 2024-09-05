@@ -12,6 +12,12 @@ export class Notification {
   @Column()
   message: string;
 
+  @Column()
+  imageUrl: string;
+
+  @Column()
+  imageId: string;
+
   // @ManyToOne(() => User, (user) => user.notifications)
   // user: User;
 

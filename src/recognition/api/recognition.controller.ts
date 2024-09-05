@@ -11,6 +11,7 @@ import {
 import { RecognitionService } from '../application/services/recognition.service';
 import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 import { Express } from 'express';
+import { RegisterFaceDto } from '../application/dtos/register-face.dto';
 
 @Controller('recognition')
 export class RecognitionController {
@@ -24,9 +25,8 @@ export class RecognitionController {
   @Post('register-face')
   @UseInterceptors(FilesInterceptor('files', 4))
   async registerFace(
-    @Body('name') name: string,
+    @Body() registerFaceDto: RegisterFaceDto,
     @UploadedFiles() files: Express.Multer.File[],
-    @Body('userID') userID: number,
   ) {
     if (!files || files.length !== 4) {
       throw new BadRequestException('Se necesitan exactamente 4 imágenes.');
@@ -37,14 +37,19 @@ export class RecognitionController {
     const leftProfile = files[2];
     const fromAbove = files[3];
 
+    const imagesBuffer: {
+      [key: string]: (Buffer | null) | null;
+    } = {
+      frontal: frontal.buffer ?? null,
+      rightProfile: rightProfile.buffer ?? null,
+      leftProfile: leftProfile.buffer ?? null,
+      fromAbove: fromAbove?.buffer ?? null,
+    };
+
     return this.recognitionService.saveFace(
-      name,
+      registerFaceDto,
       //file?.buffer ?? null,
-      frontal?.buffer ?? null,
-      rightProfile?.buffer ?? null,
-      leftProfile?.buffer ?? null,
-      fromAbove?.buffer ?? null,
-      userID,
+      imagesBuffer,
     );
   }
 

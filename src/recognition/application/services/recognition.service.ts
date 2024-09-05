@@ -24,6 +24,7 @@ import { UserService } from 'src/iam/application/services/user.service';
 //import { Profile } from 'src/iam/domain/entities/profile.entity';
 import { STATUS } from 'src/iam/domain/constants/status.contstant';
 import { FaceRecognitionGateway } from 'src/shared/websocket/websocket.gateway';
+import { RegisterFaceDto } from '../dtos/register-face.dto';
 const { Canvas, Image, ImageData } = canvas;
 faceapi.env.monkeyPatch({ Canvas, Image, ImageData } as any);
 const ffmpegPath = require('ffmpeg-static');
@@ -69,24 +70,20 @@ export class RecognitionService {
   }
 
   async addFaceToModel(
-    userId: number,
-    name: string,
-    //imageBuffer: Buffer | null,
-    frontalimageBuffer: Buffer | null,
-    rightProfileBuffer: Buffer | null,
-    leftProfileBuffer: Buffer | null,
-    fromAboveBuffer: Buffer | null,
+    registerFaceDto: RegisterFaceDto,
+    imagesBuffer: {
+      [key: string]: Buffer | null;
+    },
   ) {
     try {
-      const user = await this.userService.getUserById(userId);
+      const { name, userID } = registerFaceDto;
+      const user = await this.userService.getUserById(Number(userID));
       if (!user) throw new Error('User not found');
 
-      const buffers = [
-        frontalimageBuffer,
-        rightProfileBuffer,
-        leftProfileBuffer,
-        fromAboveBuffer,
-      ];
+      const { frontal, rightProfile, leftProfile, fromAbove } = imagesBuffer;
+
+      const buffers = [frontal, rightProfile, leftProfile, fromAbove];
+
       const loadAndDetect = async (buffer: Buffer | null) => {
         if (buffer) {
           const image: any = await loadImage(buffer);
@@ -106,7 +103,7 @@ export class RecognitionService {
 
       if (validDescriptors.length > 0) {
         const existingDescriptorIndex = this.labeledDescriptors.findIndex(
-          (desc) => desc.label === userId.toString(),
+          (desc) => desc.label === userID.toString(),
         );
 
         if (existingDescriptorIndex !== -1) {
@@ -115,7 +112,7 @@ export class RecognitionService {
           );
         } else {
           const labeledFaceDescriptors = new faceapi.LabeledFaceDescriptors(
-            userId.toString(),
+            userID.toString(),
             validDescriptors,
           );
 
@@ -147,19 +144,19 @@ export class RecognitionService {
   */
 
   async saveFace(
-    name: string,
+    registerFaceDto: RegisterFaceDto,
     //imageBuffer: Buffer | null,
-    frontalimageBuffer: Buffer | null,
-    rightProfileBuffer: Buffer | null,
-    leftProfileBuffer: Buffer | null,
-    fromAboveBuffer: Buffer | null,
-
-    userID: number,
+    imagesBuffer: {
+      [key: string]: Buffer | null;
+    },
   ) {
     try {
+      const { name, userID } = registerFaceDto;
+
+      const { frontal, rightProfile, leftProfile, fromAbove } = imagesBuffer;
       //if (!imageBuffer) throw new Error('No image buffer provided');
       if (!name) throw new Error('No name provided');
-      const user = await this.userService.getUserById(userID);
+      const user = await this.userService.getUserById(Number(userID));
       if (!user) throw new Error('User not found');
 
       let imageUrl = '';
@@ -209,13 +206,9 @@ export class RecognitionService {
       await this.registeredFaceRepository.save(registeredFace);
 
       const labeledDescriptors = await this.addFaceToModel(
-        userID,
-        name,
+        registerFaceDto,
         //imageBuffer,
-        frontalimageBuffer,
-        rightProfileBuffer,
-        leftProfileBuffer,
-        fromAboveBuffer,
+        imagesBuffer,
       );
 
       let profile = user.profile;
@@ -315,9 +308,38 @@ export class RecognitionService {
           const ctx = canvas.getContext('2d');
           ctx.drawImage(image, 0, 0, image.width, image.height);
           const predictions: any = await this.recognizeFace(canvas.toBuffer());
+
+          // if (imageBuffer) {
+          //   const tempFilePath = join(tmpdir(), name);
+          //   writeFileSync(tempFilePath, imageBuffer);
+
+          //   logoID = generateUUID();
+          //   imageUrl = await this.cloudinaryService.uploadFile({
+          //     tempFilePath,
+          //     logoID,
+          //   });
+          // }
+
+          let imageUrl = '';
+          let logoID = '';
+          console.time('coudinary');
+          if (canvas.toBuffer()) {
+            const tempFilePath = join(tmpdir(), 'frame.jpg');
+            writeFileSync(tempFilePath, canvas.toBuffer());
+
+            logoID = generateUUID();
+            imageUrl = await this.cloudinaryService.uploadFile({
+              tempFilePath,
+              logoID,
+            });
+          }
+          console.timeEnd('coudinary');
+
           if (!predictions || predictions?.label === 'unknown') {
             this.notificationService.create({
               type: 'Not Verified',
+              imageId: logoID,
+              imageUrl: imageUrl,
               message: 'An unknown face was detected on the camera stream',
               timestamp: new Date(),
             });
@@ -325,6 +347,8 @@ export class RecognitionService {
           } else {
             this.notificationService.create({
               type: 'Verified',
+              imageId: logoID,
+              imageUrl: imageUrl,
               message: `A face was detected on the camera stream: ${predictions?.name}`,
               timestamp: new Date(),
             });

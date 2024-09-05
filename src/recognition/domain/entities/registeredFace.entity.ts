@@ -16,11 +16,11 @@ export class RegisteredFace {
   @Column()
   name: string;
 
-  @Column()
-  imageUrl: string;
+  // @Column()
+  // imageUrl: string;
 
-  @Column()
-  imageId: string;
+  // @Column()
+  // imageId: string;
 
   @Column('longtext')
   labeledDescriptors: string;
