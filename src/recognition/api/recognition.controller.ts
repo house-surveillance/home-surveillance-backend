@@ -2,15 +2,13 @@ import {
   Controller,
   Post,
   Body,
-  UploadedFile,
   UseInterceptors,
   Get,
   UploadedFiles,
   BadRequestException,
 } from '@nestjs/common';
 import { RecognitionService } from '../application/services/recognition.service';
-import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
-import { Express } from 'express';
+import { FilesInterceptor } from '@nestjs/platform-express';
 import { RegisterFaceDto } from '../application/dtos/register-face.dto';
 
 @Controller('recognition')
@@ -29,7 +27,7 @@ export class RecognitionController {
     @UploadedFiles() files: Express.Multer.File[],
   ) {
     if (!files || files.length !== 4) {
-      throw new BadRequestException('Se necesitan exactamente 4 imágenes.');
+      throw new BadRequestException('Exactly 4 images are required.');
     }
 
     const frontal = files[0];
@@ -46,7 +44,7 @@ export class RecognitionController {
       fromAbove: fromAbove?.buffer ?? null,
     };
 
-    return this.recognitionService.saveFace(registerFaceDto, imagesBuffer);
+    return this.recognitionService.registerFace(registerFaceDto, imagesBuffer);
   }
 
   @Post('process-ip-camera')

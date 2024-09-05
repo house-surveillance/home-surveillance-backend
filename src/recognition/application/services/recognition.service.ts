@@ -143,7 +143,7 @@ export class RecognitionService {
       fromAbove?.buffer ?? null,
   */
 
-  async saveFace(
+  async registerFace(
     registerFaceDto: RegisterFaceDto,
     //imageBuffer: Buffer | null,
     imagesBuffer: {
@@ -153,50 +153,17 @@ export class RecognitionService {
     try {
       const { name, userID } = registerFaceDto;
 
-      const { frontal, rightProfile, leftProfile, fromAbove } = imagesBuffer;
-      //if (!imageBuffer) throw new Error('No image buffer provided');
       if (!name) throw new Error('No name provided');
       const user = await this.userService.getUserById(Number(userID));
       if (!user) throw new Error('User not found');
 
-      let imageUrl = '';
-      let logoID = '';
-      // if (imageBuffer) {
-      //   const tempFilePath = join(tmpdir(), name);
-      //   writeFileSync(tempFilePath, imageBuffer);
-
-      //   logoID = generateUUID();
-      //   imageUrl = await this.cloudinaryService.uploadFile({
-      //     tempFilePath,
-      //     logoID,
-      //   });
-      // }
-
-      const status = !imageUrl ? STATUS.unverified : STATUS.verified;
-
       const auxRegisteredFace = {
         name,
-        imageId: logoID ?? '',
-        imageUrl: imageUrl ? imageUrl : '',
+        imageId: '',
+        imageUrl: '',
         labeledDescriptors: '',
-        frontalFace: '',
-        rightProfileFace: '',
-        leftProfileFace: '',
-        fromAboveFace: '',
-        status: status,
       };
 
-      /*
-       frontalFace: string;
-        @Column('longtext')
-        rightProfileFace: string;
-
-      @Column('longtext')
-      leftProfileFace: string;
-
-      @Column('longtext')
-      fromAboveFace: string;
-      */
       const registeredFace = this.registeredFaceRepository.create({
         ...auxRegisteredFace,
       });
@@ -207,7 +174,6 @@ export class RecognitionService {
 
       const labeledDescriptors = await this.addFaceToModel(
         registerFaceDto,
-        //imageBuffer,
         imagesBuffer,
       );
 
@@ -215,8 +181,6 @@ export class RecognitionService {
 
       if (labeledDescriptors.length > 0) {
         await this.userService.updateProfile(user.profile.id, {
-          imageUrl: imageUrl,
-          imageId: logoID,
           status: STATUS.verified,
         });
       }
@@ -309,20 +273,9 @@ export class RecognitionService {
           ctx.drawImage(image, 0, 0, image.width, image.height);
           const predictions: any = await this.recognizeFace(canvas.toBuffer());
 
-          // if (imageBuffer) {
-          //   const tempFilePath = join(tmpdir(), name);
-          //   writeFileSync(tempFilePath, imageBuffer);
-
-          //   logoID = generateUUID();
-          //   imageUrl = await this.cloudinaryService.uploadFile({
-          //     tempFilePath,
-          //     logoID,
-          //   });
-          // }
-
           let imageUrl = '';
           let logoID = '';
-          console.time('coudinary');
+
           if (canvas.toBuffer()) {
             const tempFilePath = join(tmpdir(), 'frame.jpg');
             writeFileSync(tempFilePath, canvas.toBuffer());
@@ -333,7 +286,6 @@ export class RecognitionService {
               logoID,
             });
           }
-          console.timeEnd('coudinary');
 
           if (!predictions || predictions?.label === 'unknown') {
             this.notificationService.create({
