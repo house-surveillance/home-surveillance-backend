@@ -4,6 +4,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import * as faceapi from 'face-api.js';
 import * as canvas from 'canvas';
 import * as fs from 'fs';
+import { promises as fsPromises } from 'fs';
 import * as path from 'path';
 import axios from 'axios';
 import ffmpeg from 'fluent-ffmpeg';
@@ -25,6 +26,8 @@ import { UserService } from 'src/iam/application/services/user.service';
 import { STATUS } from 'src/iam/domain/constants/status.contstant';
 import { FaceRecognitionGateway } from 'src/shared/websocket/websocket.gateway';
 import { RegisterFaceDto } from '../dtos/register-face.dto';
+import { User } from 'src/iam/domain/entities/user.entity';
+import { BestMatch } from '../interfaces/recognition.interface';
 const { Canvas, Image, ImageData } = canvas;
 faceapi.env.monkeyPatch({ Canvas, Image, ImageData } as any);
 const ffmpegPath = require('ffmpeg-static');
@@ -34,12 +37,14 @@ export class RecognitionService {
   private readonly logger = new Logger(RecognitionService.name);
   private recognizer: faceapi.FaceMatcher | null = null;
   private labeledDescriptors: faceapi.LabeledFaceDescriptors[] = [];
+  
 
   private async loadModels() {
     const modelPath = path.resolve(__dirname, '../../../../public/models');
     await faceapi.nets.ssdMobilenetv1.loadFromDisk(modelPath);
     await faceapi.nets.faceLandmark68Net.loadFromDisk(modelPath);
     await faceapi.nets.faceRecognitionNet.loadFromDisk(modelPath);
+    await faceapi.nets.tinyFaceDetector.loadFromDisk(modelPath);
   }
   constructor(
     @InjectRepository(RegisteredFace)
@@ -76,7 +81,7 @@ export class RecognitionService {
     },
   ) {
     try {
-      const { name, userID } = registerFaceDto;
+      const { userID } = registerFaceDto;
       const user = await this.userService.getUserById(Number(userID));
       if (!user) throw new Error('User not found');
 
@@ -136,31 +141,19 @@ export class RecognitionService {
     }
   }
 
-  /*
-    frontal?.buffer ?? null,
-      rightProfile?.buffer ?? null,
-      leftProfile?.buffer ?? null,
-      fromAbove?.buffer ?? null,
-  */
-
   async registerFace(
     registerFaceDto: RegisterFaceDto,
-    //imageBuffer: Buffer | null,
     imagesBuffer: {
       [key: string]: Buffer | null;
     },
   ) {
     try {
-      const { name, userID } = registerFaceDto;
+      const { userID } = registerFaceDto;
 
-      if (!name) throw new Error('No name provided');
       const user = await this.userService.getUserById(Number(userID));
       if (!user) throw new Error('User not found');
 
       const auxRegisteredFace = {
-        name,
-        imageId: '',
-        imageUrl: '',
         labeledDescriptors: '',
       };
 
@@ -169,7 +162,6 @@ export class RecognitionService {
       });
 
       registeredFace.user = user;
-
       await this.registeredFaceRepository.save(registeredFace);
 
       const labeledDescriptors = await this.addFaceToModel(
@@ -222,13 +214,19 @@ export class RecognitionService {
             ),
           );
         });
-        this.recognizer = new faceapi.FaceMatcher(labeledFaceDescriptors, 0.6);
+        this.recognizer = new faceapi.FaceMatcher(labeledFaceDescriptors, 0.8);
       }
 
       // Cargar imagen y detectar rostros
       const image: any = await canvas.loadImage(imageBuffer);
       const detections = await faceapi
-        .detectAllFaces(image)
+        .detectAllFaces(
+          image,
+          new faceapi.TinyFaceDetectorOptions({
+            inputSize: 128,
+            scoreThreshold: 0.1,
+          }),
+        )
         .withFaceLandmarks()
         .withFaceDescriptors();
 
@@ -266,56 +264,154 @@ export class RecognitionService {
           this.logger.error(`ffmpeg stderr: ${stderr}`);
         })
         .on('end', async () => {
-          this.logger.log('Processing finished!');
-          const image = await loadImage(join(__dirname, 'frame.jpg'));
-          const canvas = createCanvas(image.width, image.height);
-          const ctx = canvas.getContext('2d');
-          ctx.drawImage(image, 0, 0, image.width, image.height);
-          const predictions: any = await this.recognizeFace(canvas.toBuffer());
+          try {
+            this.logger.log('Processing finished!');
+            console.time('detection');
+            const image = await loadImage(join(__dirname, 'frame.jpg'));
+            const canvas = createCanvas(image.width, image.height);
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(image, 0, 0, image.width, image.height);
+            const buffer = canvas.toBuffer();
 
-          let imageUrl = '';
-          let logoID = '';
+            // Paralelizar la detección de rostros y la escritura del archivo temporal
+            const [predictions, test] = await Promise.all([
+              this.recognizeFace(buffer),
+              fsPromises.writeFile(join(tmpdir(), 'frame.jpg'), buffer),
+            ]);
+            console.log(
+              '🚀 ~ RecognitionService ~ .on ~ predictions:',
+              predictions,
+            );
 
-          if (canvas.toBuffer()) {
-            const tempFilePath = join(tmpdir(), 'frame.jpg');
-            writeFileSync(tempFilePath, canvas.toBuffer());
+            let imageUrl = '';
+            let logoID = '';
 
-            logoID = generateUUID();
-            imageUrl = await this.cloudinaryService.uploadFile({
-              tempFilePath,
-              logoID,
-            });
+            if (buffer) {
+              const tempFilePath = join(tmpdir(), 'frame.jpg');
+              logoID = generateUUID();
+              imageUrl = await this.cloudinaryService.uploadFile({
+                tempFilePath,
+                logoID,
+              });
+
+              await fsPromises.unlink(tempFilePath);
+            }
+
+            if (!predictions || !predictions.id) {
+              console.log('Unknown face detected!');
+              this.notificationService.create({
+                type: 'Not Verified',
+                imageId: logoID,
+                imageUrl: imageUrl,
+                message: 'An unknown face was detected on the camera stream',
+                timestamp: new Date(),
+              });
+            } else {
+              console.log(`Recognized face: ${predictions?.id}`);
+              this.notificationService.create({
+                type: 'Verified',
+                imageId: logoID,
+                imageUrl: imageUrl,
+                message: `A face was detected on the camera stream: ${predictions?.id}`,
+                timestamp: new Date(),
+              });
+            }
+
+            // Eliminar el archivo original después de procesarlo
+            await fsPromises.unlink(join(__dirname, 'frame.jpg'));
+            console.timeEnd('detection');
+          } catch (error) {
+            this.logger.error(`Error during processing: ${error.message}`);
           }
-
-          if (!predictions || predictions?.label === 'unknown') {
-            this.notificationService.create({
-              type: 'Not Verified',
-              imageId: logoID,
-              imageUrl: imageUrl,
-              message: 'An unknown face was detected on the camera stream',
-              timestamp: new Date(),
-            });
-            console.log('Unknown face detected!');
-          } else {
-            this.notificationService.create({
-              type: 'Verified',
-              imageId: logoID,
-              imageUrl: imageUrl,
-              message: `A face was detected on the camera stream: ${predictions?.name}`,
-              timestamp: new Date(),
-            });
-
-            console.log(`Recognized face: ${predictions?.name}`);
-          }
-          unlink(join(__dirname, 'frame.jpg'), (err) => {
-            if (err) console.error(err);
-          });
         })
         .save(join(__dirname, 'frame.jpg'));
     } catch (error) {
       this.logger.error(`Failed to stream video: ${error.message}`);
     }
   }
+
+  async processWebcamStream() {
+    try {
+      ffmpeg()
+        .input('video=GENERAL WEBCAM')
+        .inputFormat('dshow')
+        .inputOptions(['-framerate 30'])
+        .outputOptions(['-t 5', '-vf', 'fps=1/2'])
+        .on('start', (commandLine) => {
+          this.logger.log(`Spawned Ffmpeg with command: ${commandLine}`);
+        })
+        .on('error', (err, stdout, stderr) => {
+          this.logger.error(`An error occurred: ${err.message}`);
+          this.logger.error(`ffmpeg stdout: ${stdout}`);
+          this.logger.error(`ffmpeg stderr: ${stderr}`);
+        })
+        .on('end', async () => {
+          try {
+            this.logger.log('Processing finished!');
+            console.time('detection');
+            const image = await loadImage(join(__dirname, 'frame.jpg'));
+            const canvas = createCanvas(image.width, image.height);
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(image, 0, 0, image.width, image.height);
+            const buffer = canvas.toBuffer();
+
+            // Parallelize face detection and temporary file writing
+            const [predictions, test] = await Promise.all([
+              this.recognizeFace(buffer),
+              fsPromises.writeFile(join(tmpdir(), 'frame.jpg'), buffer),
+            ]);
+            console.log(
+              '🚀 ~ RecognitionService ~ .on ~ predictions:',
+              predictions,
+            );
+
+            let imageUrl = '';
+            let logoID = '';
+
+            if (buffer) {
+              const tempFilePath = join(tmpdir(), 'frame.jpg');
+              logoID = generateUUID();
+              imageUrl = await this.cloudinaryService.uploadFile({
+                tempFilePath,
+                logoID,
+              });
+
+              await fsPromises.unlink(tempFilePath);
+            }
+
+            if (!predictions || !predictions.id) {
+              console.log('Unknown face detected!');
+              this.notificationService.create({
+                type: 'Not Verified',
+                imageId: logoID,
+                imageUrl: imageUrl,
+                message: 'An unknown face was detected on the camera stream',
+                timestamp: new Date(),
+              });
+            } else {
+              console.log(`Recognized face: ${predictions?.id}`);
+              this.notificationService.create({
+                type: 'Verified',
+                imageId: logoID,
+                imageUrl: imageUrl,
+                message: `A face was detected on the camera stream: ${predictions?.id}`,
+                timestamp: new Date(),
+              });
+            }
+
+            // Delete the original file after processing
+            await fsPromises.unlink(join(__dirname, 'frame.jpg'));
+            console.timeEnd('detection');
+          } catch (error) {
+            this.logger.error(`Error during processing: ${error.message}`);
+          }
+        })
+        .save(join(__dirname, 'frame.jpg'));
+    } catch (error) {
+      this.logger.error(`Failed to stream video: ${error.message}`);
+    }
+  }
+
   async getStream(streamURL: string): Promise<void> {
     try {
       ffmpeg(streamURL)
@@ -343,7 +439,7 @@ export class RecognitionService {
       ffmpeg(streamURL)
         .outputOptions('-f', 'image2pipe')
         .outputOptions('-vcodec', 'mjpeg')
-        .outputOptions('-vf', 'fps=0.5')
+        .outputOptions('-vf', 'fps=1/2')
         .on('start', (commandLine) => {
           this.logger.log(`Spawned Ffmpeg with command: ${commandLine}`);
         })
@@ -361,6 +457,8 @@ export class RecognitionService {
               .detectAllFaces(cnvs)
               .withFaceLandmarks()
               .withFaceDescriptors();
+
+            console.log(detections.length);
             console.timeEnd('detection');
 
             detections.length
@@ -370,7 +468,63 @@ export class RecognitionService {
           };
 
           img.onerror = (err) => {
-            console.error('Error loading image:', err.message);
+            //console.error('Error loading image:', err.message);
+          };
+
+          const base64Data = chunk.toString('base64');
+          img.src = `data:image/jpeg;base64,${base64Data}`;
+        })
+        .on('error', (err) => {
+          console.error('Error processing video:', err);
+        });
+    } catch (error) {
+      console.error('Error processing video:', error.message);
+    }
+  }
+
+  async processWebcamVideo(): Promise<void> {
+    try {
+      ffmpeg()
+        .input('video=GENERAL WEBCAM')
+        .inputFormat('dshow')
+        .outputOptions('-f', 'image2pipe')
+        .outputOptions('-vcodec', 'mjpeg')
+        .outputOptions('-vf', 'fps=1/2')
+        .on('start', (commandLine) => {
+          this.logger.log(`Spawned Ffmpeg with command: ${commandLine}`);
+        })
+        .pipe()
+        .on('data', async (chunk) => {
+          const img = new Image();
+
+          img.onload = async () => {
+            const cnvs: any = createCanvas(img.width, img.height);
+            const ctx = cnvs.getContext('2d');
+            ctx.drawImage(img, 0, 0, img.width, img.height);
+
+            console.time('detection');
+            const detections = await faceapi
+              .detectAllFaces(
+                cnvs,
+                new faceapi.TinyFaceDetectorOptions({
+                  inputSize: 128,
+                  scoreThreshold: 0.1,
+                }),
+              )
+              .withFaceLandmarks()
+              .withFaceDescriptors();
+
+            console.log(detections.length);
+            console.timeEnd('detection');
+
+            detections.length
+              ? console.log('Face detected')
+              : console.log('No face detected');
+            //this.gateway.sendDetectionResult(detections);
+          };
+
+          img.onerror = (err) => {
+            //console.error('Error loading image:', err.message);
           };
 
           const base64Data = chunk.toString('base64');

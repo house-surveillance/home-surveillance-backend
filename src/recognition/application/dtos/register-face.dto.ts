@@ -7,8 +7,8 @@ import {
 } from 'class-validator';
 
 export class RegisterFaceDto {
-  @IsString()
-  name: string;
+//   @IsString()
+//   name: string;
 
   @IsString()
   userID: string;

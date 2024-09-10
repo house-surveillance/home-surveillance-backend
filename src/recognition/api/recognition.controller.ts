@@ -49,6 +49,9 @@ export class RecognitionController {
 
   @Post('process-ip-camera')
   async processIPCameraStream(@Body('streamURL') streamURL: string) {
-    await this.recognitionService.processAndRecordStream(streamURL);
+    //await this.recognitionService.processAndRecordStream(streamURL);
+    await this.recognitionService.processWebcamStream();
+    //await this.recognitionService.processVideo(streamURL);
+    //await this.recognitionService.processWebcamVideo();
   }
 }

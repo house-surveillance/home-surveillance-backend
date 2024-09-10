@@ -13,8 +13,8 @@ export class RegisteredFace {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column()
-  name: string;
+  // @Column()
+  // name: string;
 
   // @Column()
   // imageUrl: string;

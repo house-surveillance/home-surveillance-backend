@@ -89,7 +89,7 @@ export class AuthService {
       console.log('🚀 ~ AuthService ~ create ~ user:', user);
       await this.userRepository.save(user);
       delete user.password;
-      delete user.profile;
+      user.profile;
       //delete user.account;
 
       return {
