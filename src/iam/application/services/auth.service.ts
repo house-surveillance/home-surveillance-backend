@@ -34,9 +34,26 @@ export class AuthService {
   async create(createUserDto: CreateUserDto, imageProfile: Buffer | null) {
     try {
       const { profile, password, userName, roles, email } = createUserDto;
-
-      //  console.log(profile);
       const passwordBcrypt = bcrypt.hashSync(password, 10);
+
+      const existUserByEmail = await this.userRepository.findOne({
+        where: { email: email },
+      });
+      const existUserByUserName = await this.userRepository.findOne({
+        where: { userName: userName },
+      });
+
+      if (existUserByEmail) {
+        throw new BadRequestException(
+          'There is already a user with that email and username',
+        );
+      }
+
+      if (existUserByUserName) {
+        throw new BadRequestException(
+          'There is already a user with that username',
+        );
+      }
 
       let imageUrl = '';
       let logoID = '';
@@ -67,30 +84,13 @@ export class AuthService {
         password: passwordBcrypt,
       };
 
-      const existUserByEmail = await this.userRepository.findOne({
-        where: { email: email },
-      });
-      const existUserByUserName = await this.userRepository.findOne({
-        where: { userName: userName },
-      });
-
-      if (existUserByEmail) {
-        throw new BadRequestException(
-          'There is already a user with that email and username',
-        );
-      }
-
-      if (existUserByUserName) {
-        throw new BadRequestException(
-          'There is already a user with that username',
-        );
-      }
       const user = this.userRepository.create(auxUser);
-      console.log('🚀 ~ AuthService ~ create ~ user:', user);
       await this.userRepository.save(user);
+
       delete user.password;
+      delete user.face;
+
       user.profile;
-      //delete user.account;
 
       return {
         ...user,
@@ -114,6 +114,7 @@ export class AuthService {
             id: true,
             userName: true,
           },
+          relations: ['profile'],
         }))
       : (user = await this.userRepository.findOne({
           where: { userName },
@@ -124,6 +125,7 @@ export class AuthService {
             id: true,
             email: true,
           },
+          relations: ['profile'],
         }));
 
     if (!user) throw new UnauthorizedException('invalid username or email');
