@@ -101,32 +101,25 @@ export class AuthService {
     }
   }
 
+  private async findUser(email?: string, userName?: string) {
+    const whereClause = email ? { email } : { userName };
+    return this.userRepository.findOne({
+      where: whereClause,
+      select: {
+        email: true,
+        password: true,
+        roles: true,
+        id: true,
+        userName: true,
+      },
+      relations: ['profile'],
+    });
+  }
+
   async login(loginDto: LoginDto) {
     const { email, userName, password } = loginDto;
-    let user: { password: string; id: number; userName: string; email: string };
-    email
-      ? (user = await this.userRepository.findOne({
-          where: { email },
-          select: {
-            email: true,
-            password: true,
-            roles: true,
-            id: true,
-            userName: true,
-          },
-          relations: ['profile'],
-        }))
-      : (user = await this.userRepository.findOne({
-          where: { userName },
-          select: {
-            password: true,
-            userName: true,
-            roles: true,
-            id: true,
-            email: true,
-          },
-          relations: ['profile'],
-        }));
+
+    const user = await this.findUser(email, userName);
 
     if (!user) throw new UnauthorizedException('invalid username or email');
 

@@ -43,7 +43,7 @@ export class AuthController {
   ) {
     const createUserDto = new CreateUserDto();
     const rolesArray = roles.split(',');
-    
+
     createUserDto.email = email;
     createUserDto.userName = userName;
     createUserDto.password = password;
@@ -58,6 +58,7 @@ export class AuthController {
 
   @Post('login')
   loginUser(@Body() LoginAccountDto: LoginDto) {
+    console.log('login', LoginAccountDto);
     return this.authService.login(LoginAccountDto);
   }
 

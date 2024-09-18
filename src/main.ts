@@ -20,8 +20,8 @@ async function bootstrap() {
   );
 
   const config = new DocumentBuilder()
-    .setTitle('RCA-API')
-    .setDescription('Rent Car Assists Api Documentation')
+    .setTitle('HS-API')
+    .setDescription('HS Assists Api Documentation')
     .setVersion('1.0')
     .addTag('CRA')
     .build();
