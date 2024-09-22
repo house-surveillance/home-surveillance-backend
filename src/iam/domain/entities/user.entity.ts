@@ -33,11 +33,18 @@ export class User {
   @Column('simple-array')
   roles: string[];
 
-  @OneToOne(() => Profile, (profile) => profile.user)
+  @Column('text')
+  fcmToken: string;
+
+  @OneToOne(() => Profile, (profile) => profile.user, {
+    onDelete: 'CASCADE',
+  })
   profile: Profile;
 
-  @OneToOne(() => RegisteredFace, (face) => face.user) 
-  face: RegisteredFace; 
+  @OneToOne(() => RegisteredFace, (face) => face.user, {
+    onDelete: 'CASCADE',
+  })
+  face: RegisteredFace;
 
   // @OneToMany(() => Notification, (notification) => notification.user)
   // notifications: Notification[];

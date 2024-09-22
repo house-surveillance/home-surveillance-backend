@@ -1,4 +1,13 @@
-import { Controller, Get } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpException,
+  HttpStatus,
+  Param,
+  Post,
+} from '@nestjs/common';
 import { UserService } from 'src/iam/application/services/user.service';
 
 @Controller('users')
@@ -8,5 +17,30 @@ export class UsersController {
   @Get()
   getUsers() {
     return this.userService.getUsers();
+  }
+
+  @Get('/fCMToken/:userId')
+  async getUserfCMToken(@Param('userId') id: string): Promise<any> {
+    try {
+      return this.userService.getfCMTokenForUser(id);
+    } catch (error) {
+      throw new HttpException(
+        { message: error.message },
+        error.status || HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  @Post('/fCMToken')
+  setfCMTokenForUser(
+    @Body('userId') userId: string,
+    @Body('fcmToken') fcmToken: string,
+  ) {
+    return this.userService.setfCMTokenForUser(userId, fcmToken);
+  }
+
+  @Delete('/:id')
+  deleteUser(@Param('id') id: string) {
+    return this.userService.deleteUser(id);
   }
 }

@@ -5,11 +5,17 @@ import { Notification } from './domain/entities/notification.entity';
 import { NotificationService } from './application/services/notification.service';
 import { NotificationsGateway } from './infraestructure/notificationGateWay';
 import { CloudinaryService } from 'src/shared/cloudinary/cloudinary.service';
+import { firebaseAdminProvider } from './infraestructure/firebase_admin_provider';
 
 @Module({
   imports: [TypeOrmModule.forFeature([Notification])],
   controllers: [NotificationsController],
-  providers: [NotificationService, NotificationsGateway, CloudinaryService],
-  exports: [NotificationService, NotificationsGateway],
+  providers: [
+    NotificationService,
+    NotificationsGateway,
+    CloudinaryService,
+    firebaseAdminProvider,
+  ],
+  exports: [NotificationService, NotificationsGateway, firebaseAdminProvider],
 })
 export class NotificationsModule {}

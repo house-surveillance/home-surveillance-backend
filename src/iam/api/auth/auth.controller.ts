@@ -44,7 +44,7 @@ export class AuthController {
     const createUserDto = new CreateUserDto();
     const rolesArray = roles.split(',');
 
-    createUserDto.email = email;
+    createUserDto.email = email?.toLowerCase();
     createUserDto.userName = userName;
     createUserDto.password = password;
     createUserDto.roles = rolesArray;
@@ -57,9 +57,13 @@ export class AuthController {
   }
 
   @Post('login')
-  loginUser(@Body() LoginAccountDto: LoginDto) {
-    console.log('login', LoginAccountDto);
-    return this.authService.login(LoginAccountDto);
+  async loginUser(@Body() LoginAccountDto: LoginDto) {
+    try {
+      console.log('login', LoginAccountDto);
+      return this.authService.login(LoginAccountDto);
+    } catch (error) {
+      return error.message;
+    }
   }
 
   // @Get('check-status')

@@ -25,6 +25,7 @@ export class NotificationsController {
     @UploadedFile() file: Express.Multer.File,
     @Body('type') type: string,
     @Body('label') label: string,
+    @Body('fcmTokens') fcmTokens: string,
   ) {
     const buffer = file?.buffer ?? null;
 
@@ -32,6 +33,13 @@ export class NotificationsController {
       throw new BadRequestException('Image is required.');
     }
 
-    return this.notificationService.registerNotification(type, label, buffer);
+    const tokensfcm = fcmTokens.split(',');
+
+    return this.notificationService.registerNotification(
+      type,
+      label,
+      buffer,
+      tokensfcm,
+    );
   }
 }

@@ -1,18 +1,12 @@
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import * as bcrypt from 'bcrypt';
-import { JwtService } from '@nestjs/jwt';
 import {
   BadRequestException,
   Injectable,
   InternalServerErrorException,
-  UnauthorizedException,
+  NotFoundException,
 } from '@nestjs/common';
 import { User } from 'src/iam/domain/entities/user.entity';
-import { CreateUserDto } from '../dtos/user/create-user.dto';
-import { LoginDto } from '../dtos/user/login.dto';
-import { JwtPayload } from 'src/iam/domain/interfaces/jwt-payload.interface';
-import { STATUS } from 'src/iam/domain/constants/status.contstant';
 import { Profile } from 'src/iam/domain/entities/profile.entity';
 
 @Injectable()
@@ -35,6 +29,36 @@ export class UserService {
     }
   }
 
+  async getfCMTokenForUser(id: string) {
+    const userId = Number(id);
+
+    const user = await this.userRepository.findOne({
+      where: { id: userId },
+      select: ['fcmToken'],
+    });
+    const fcmToken = user?.fcmToken;
+
+    if (!fcmToken) {
+      throw new NotFoundException('FCM Token not found');
+    }
+    return fcmToken;
+  }
+
+  async setfCMTokenForUser(userId: string, fcmToken: string) {
+    try {
+      const id = Number(userId);
+      const res = await this.userRepository.update(
+        { id: id },
+        { fcmToken: fcmToken },
+      );
+      console.log(res);
+      return res;
+    } catch (error) {
+      console.log('Error:', error);
+      this.handleDBErrors(error);
+    }
+  }
+
   async getUserById(id: number) {
     try {
       return await this.userRepository.findOne({
@@ -50,6 +74,16 @@ export class UserService {
   async updateProfile(id: number, data: any) {
     try {
       return await this.profileRepository.update(id, data);
+    } catch (error) {
+      console.log('Error:', error);
+      this.handleDBErrors(error);
+    }
+  }
+
+  async deleteUser(id: string) {
+    try {
+      const res = await this.userRepository.delete(id);
+      return res;
     } catch (error) {
       console.log('Error:', error);
       this.handleDBErrors(error);

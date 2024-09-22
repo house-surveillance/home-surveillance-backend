@@ -3,7 +3,6 @@ import {
   Column,
   Entity,
   JoinColumn,
-  ManyToOne,
   OneToOne,
   PrimaryGeneratedColumn,
 } from 'typeorm';
@@ -13,19 +12,10 @@ export class RegisteredFace {
   @PrimaryGeneratedColumn()
   id: number;
 
-  // @Column()
-  // name: string;
-
-  // @Column()
-  // imageUrl: string;
-
-  // @Column()
-  // imageId: string;
-
   @Column('longtext')
   labeledDescriptors: string;
 
-  @OneToOne(() => User, (user) => user.face)
+  @OneToOne(() => User, (user) => user.face, { onDelete: 'CASCADE' })
   @JoinColumn()
   user: User;
 }
