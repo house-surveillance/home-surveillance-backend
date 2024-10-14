@@ -35,6 +35,12 @@ export class NotificationService {
     });
   }
 
+  async delete(id: string) {
+    await this.notificationRepository.delete({
+      id: Number(id),
+    });
+  }
+
   async registerNotification(
     type: string,
     label: string,

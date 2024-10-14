@@ -2,7 +2,9 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   Get,
+  Param,
   Post,
   UploadedFile,
   UseInterceptors,
@@ -41,5 +43,10 @@ export class NotificationsController {
       buffer,
       tokensfcm,
     );
+  }
+
+  @Delete('/:id')
+  async delete(@Param('id') id: string) {
+    return this.notificationService.delete(id);
   }
 }

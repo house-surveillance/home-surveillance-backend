@@ -12,13 +12,14 @@ import { User } from './domain/entities/user.entity';
 import { Profile } from './domain/entities/profile.entity';
 import { UserService } from './application/services/user.service';
 import { CloudinaryService } from 'src/shared/cloudinary/cloudinary.service';
+import { Residence } from './domain/entities/residence.entity';
 
 @Module({
   controllers: [UsersController, AuthController],
   providers: [AuthService, UserService, JwtStrategy, CloudinaryService],
   imports: [
     ConfigModule,
-    TypeOrmModule.forFeature([User, Profile]),
+    TypeOrmModule.forFeature([User, Profile,Residence]),
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.registerAsync({
       inject: [ConfigService],

@@ -3,6 +3,7 @@ import {
   BeforeUpdate,
   Column,
   Entity,
+  ManyToOne,
   OneToMany,
   OneToOne,
   PrimaryGeneratedColumn,
@@ -13,6 +14,7 @@ import { RegisteredFace } from 'src/recognition/domain/entities/registeredFace.e
 import { Notification } from 'src/notifications/domain/entities/notification.entity';
 import { Alert } from 'src/notifications/domain/entities/alert.entity';
 import { Camera } from 'src/cameras/domain/cameras.enitity';
+import { Residence } from './residence.entity';
 
 @Entity('users')
 export class User {
@@ -33,7 +35,9 @@ export class User {
   @Column('simple-array')
   roles: string[];
 
-  @Column('text')
+  @Column('text', {
+    nullable: true,
+  })
   fcmToken: string;
 
   @OneToOne(() => Profile, (profile) => profile.user, {
@@ -45,6 +49,9 @@ export class User {
     onDelete: 'CASCADE',
   })
   face: RegisteredFace;
+
+  @ManyToOne(() => Residence, (residence) => residence.residents)
+  residence: Residence;
 
   // @OneToMany(() => Notification, (notification) => notification.user)
   // notifications: Notification[];

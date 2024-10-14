@@ -39,6 +39,9 @@ export class AuthController {
     @Body('password') password: string,
     @Body('roles') roles: string,
     @Body('fullName') fullName: string,
+    @Body('residenceName') recidenceName: string,
+    @Body('residenceAddress') residenceAddress: string,
+    @Body('creatorId') creatorId?: string,
     //@Body() createUserDto: CreateUserDto
   ) {
     const createUserDto = new CreateUserDto();
@@ -53,7 +56,17 @@ export class AuthController {
     createProfileDto.fullName = fullName;
     createUserDto.profile = createProfileDto;
 
-    return this.authService.create(createUserDto, file.buffer ?? null);
+    const residence = {
+      name: recidenceName,
+      address: residenceAddress,
+    };
+
+    return this.authService.create(
+      createUserDto,
+      file.buffer ?? null,
+      residence,
+      creatorId,
+    );
   }
 
   @Post('login')

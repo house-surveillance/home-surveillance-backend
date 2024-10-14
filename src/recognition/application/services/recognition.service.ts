@@ -37,7 +37,6 @@ export class RecognitionService {
   private readonly logger = new Logger(RecognitionService.name);
   private recognizer: faceapi.FaceMatcher | null = null;
   private labeledDescriptors: faceapi.LabeledFaceDescriptors[] = [];
-  
 
   private async loadModels() {
     const modelPath = path.resolve(__dirname, '../../../../public/models');
@@ -83,6 +82,7 @@ export class RecognitionService {
     try {
       const { userID } = registerFaceDto;
       const user = await this.userService.getUserById(Number(userID));
+      console.log('🚀 ~ RecognitionService ~ user:', user);
       if (!user) throw new Error('User not found');
 
       const { frontal, rightProfile, leftProfile, fromAbove } = imagesBuffer;
@@ -92,6 +92,7 @@ export class RecognitionService {
       const loadAndDetect = async (buffer: Buffer | null) => {
         if (buffer) {
           const image: any = await loadImage(buffer);
+          console.log('🚀 ~ RecognitionService ~ image:', image);
           const detections = await faceapi
             .detectAllFaces(image)
             .withFaceLandmarks()
@@ -168,6 +169,10 @@ export class RecognitionService {
         registerFaceDto,
         imagesBuffer,
       );
+      console.log(
+        '🚀 ~ RecognitionService ~ labeledDescriptors:',
+        labeledDescriptors,
+      );
 
       let profile = user.profile;
 
@@ -175,10 +180,13 @@ export class RecognitionService {
         await this.userService.updateProfile(user.profile.id, {
           status: STATUS.verified,
         });
-      }
-      registeredFace.user.profile = profile;
 
-      return registeredFace;
+        registeredFace.user.profile = profile;
+        return registeredFace;
+      } else {
+        await this.registeredFaceRepository.delete(registeredFace.id);
+        throw new Error('Error registering face');
+      }
     } catch (error) {
       console.error('Error saving face: ', error);
       throw new Error('Error saving face');

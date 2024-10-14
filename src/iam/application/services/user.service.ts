@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import { User } from 'src/iam/domain/entities/user.entity';
 import { Profile } from 'src/iam/domain/entities/profile.entity';
+import { Residence } from 'src/iam/domain/entities/residence.entity';
 
 @Injectable()
 export class UserService {
@@ -16,13 +17,40 @@ export class UserService {
     private readonly userRepository: Repository<User>,
     @InjectRepository(Profile)
     private readonly profileRepository: Repository<Profile>,
+    @InjectRepository(Residence)
+    private readonly residenceRepository: Repository<Residence>,
   ) {}
 
-  async getUsers() {
+  async getUsers(id: string) {
     try {
-      return await this.userRepository.find({
+      if (!id) {
+        return await this.userRepository.find({
+          relations: ['profile', 'face'],
+        });
+      }
+      const user = await this.userRepository.findOne({
+        where: { id: Number(id) },
+        relations: ['profile', 'face', 'residence'],
+      });
+
+      if (!user) {
+        throw new NotFoundException('User not found');
+      }
+
+      // Obtener el ID de la residencia del usuario
+      const residenceId = user.residence.id;
+
+      // Obtener todos los usuarios que tienen la misma residencia
+      const usersWithSameResidence = await this.userRepository.find({
+        where: { residence: { id: residenceId } },
         relations: ['profile', 'face'],
       });
+      console.log(
+        '🚀 ~ UserService ~ getUsers ~ usersWithSameResidence:',
+        usersWithSameResidence,
+      );
+
+      return usersWithSameResidence;
     } catch (error) {
       console.log('Error:', error);
       this.handleDBErrors(error);
@@ -82,7 +110,7 @@ export class UserService {
 
   async deleteUser(id: string) {
     try {
-      const res = await this.userRepository.delete(id);
+      const res = await this.userRepository.delete({ id: Number(id) });
       return res;
     } catch (error) {
       console.log('Error:', error);

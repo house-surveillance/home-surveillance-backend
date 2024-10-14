@@ -19,6 +19,7 @@ import { writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { generateUUID } from 'src/shared/utils/generators.util';
 import { CloudinaryService } from 'src/shared/cloudinary/cloudinary.service';
+import { Residence } from 'src/iam/domain/entities/residence.entity';
 
 @Injectable()
 export class AuthService {
@@ -27,32 +28,63 @@ export class AuthService {
     private readonly userRepository: Repository<User>,
     @InjectRepository(Profile)
     private profileRepository: Repository<Profile>,
+
+    @InjectRepository(Residence)
+    private residenceRepository: Repository<Residence>,
+
     private readonly jwtService: JwtService,
     private cloudinaryService: CloudinaryService,
   ) {}
 
-  async create(createUserDto: CreateUserDto, imageProfile: Buffer | null) {
+  async create(
+    createUserDto: CreateUserDto,
+    imageProfile: Buffer | null,
+    residence,
+    creatorId?: string,
+  ) {
     try {
+      console.log('🚀 ~ AuthService ~ creatorId:', creatorId);
       const { profile, password, userName, roles, email } = createUserDto;
       const passwordBcrypt = bcrypt.hashSync(password, 10);
 
-      const existUserByEmail = await this.userRepository.findOne({
+      let userExist;
+      userExist = await this.userRepository.findOne({
         where: { email: email },
+        relations: ['profile', 'residence'],
       });
-      const existUserByUserName = await this.userRepository.findOne({
-        where: { userName: userName },
-      });
-
-      if (existUserByEmail) {
+      if (userExist) {
         throw new BadRequestException(
           'There is already a user with that email and username',
         );
       }
+      userExist = await this.userRepository.findOne({
+        where: { userName: userName },
+        relations: ['profile', 'residence'],
+      });
 
-      if (existUserByUserName) {
+      if (userExist) {
         throw new BadRequestException(
           'There is already a user with that username',
         );
+      }
+
+      let residenceRes;
+      if (creatorId != '0' && creatorId) {
+        const creator = await this.userRepository.findOne({
+          where: { id: Number(creatorId) },
+          relations: ['residence'],
+        });
+        if (!creator) {
+          throw new BadRequestException('Creator not found');
+        }
+        residenceRes = creator.residence;
+      } else {
+        const { name, address } = residence;
+        residenceRes = this.residenceRepository.create({
+          name: name,
+          address: address,
+        });
+        await this.residenceRepository.save(residenceRes);
       }
 
       let imageUrl = '';
@@ -82,6 +114,7 @@ export class AuthService {
         userName,
         roles,
         password: passwordBcrypt,
+        residence: residenceRes,
       };
 
       const user = this.userRepository.create(auxUser);
@@ -97,6 +130,7 @@ export class AuthService {
         token: this.getJwtToken({ id: user.id }),
       };
     } catch (error) {
+      console.log('Error:', error);
       this.handleDBErrors(error);
     }
   }
@@ -112,14 +146,17 @@ export class AuthService {
         id: true,
         userName: true,
       },
-      relations: ['profile'],
+      relations: ['profile', 'residence'],
     });
   }
 
   async login(loginDto: LoginDto) {
     const { email, userName, password } = loginDto;
 
-    const user = await this.findUser(email, userName);
+    const emailReal = email?.toLowerCase().trim();
+    const userNameReal = userName?.toLowerCase().trim();
+
+    const user = await this.findUser(emailReal, userNameReal);
 
     if (!user) throw new UnauthorizedException('invalid username or email');
 
@@ -152,7 +189,7 @@ export class AuthService {
   private handleDBErrors(error: any): never {
     if (error?.response?.statusCode === 400)
       throw new BadRequestException(`${error.response.message}`);
-    console.log(error.response.message);
+
     throw new InternalServerErrorException(
       `${error?.response?.message}` || 'check logs',
     );
