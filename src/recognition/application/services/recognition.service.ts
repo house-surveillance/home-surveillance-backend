@@ -82,7 +82,6 @@ export class RecognitionService {
     try {
       const { userID } = registerFaceDto;
       const user = await this.userService.getUserById(Number(userID));
-      console.log('🚀 ~ RecognitionService ~ user:', user);
       if (!user) throw new Error('User not found');
 
       const { frontal, rightProfile, leftProfile, fromAbove } = imagesBuffer;
@@ -92,7 +91,6 @@ export class RecognitionService {
       const loadAndDetect = async (buffer: Buffer | null) => {
         if (buffer) {
           const image: any = await loadImage(buffer);
-          console.log('🚀 ~ RecognitionService ~ image:', image);
           const detections = await faceapi
             .detectAllFaces(image)
             .withFaceLandmarks()
@@ -315,7 +313,6 @@ export class RecognitionService {
                 timestamp: new Date(),
               });
             } else {
-              console.log(`Recognized face: ${predictions?.id}`);
               this.notificationService.create({
                 type: 'Verified',
                 imageId: logoID,
@@ -397,7 +394,6 @@ export class RecognitionService {
                 timestamp: new Date(),
               });
             } else {
-              console.log(`Recognized face: ${predictions?.id}`);
               this.notificationService.create({
                 type: 'Verified',
                 imageId: logoID,

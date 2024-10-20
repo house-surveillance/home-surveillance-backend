@@ -72,7 +72,6 @@ export class AuthController {
   @Post('login')
   async loginUser(@Body() LoginAccountDto: LoginDto) {
     try {
-      console.log('login', LoginAccountDto);
       return this.authService.login(LoginAccountDto);
     } catch (error) {
       return error.message;

@@ -45,10 +45,6 @@ export class UserService {
         where: { residence: { id: residenceId } },
         relations: ['profile', 'face'],
       });
-      console.log(
-        '🚀 ~ UserService ~ getUsers ~ usersWithSameResidence:',
-        usersWithSameResidence,
-      );
 
       return usersWithSameResidence;
     } catch (error) {

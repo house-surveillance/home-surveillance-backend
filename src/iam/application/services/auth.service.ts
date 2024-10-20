@@ -43,7 +43,6 @@ export class AuthService {
     creatorId?: string,
   ) {
     try {
-      console.log('🚀 ~ AuthService ~ creatorId:', creatorId);
       const { profile, password, userName, roles, email } = createUserDto;
       const passwordBcrypt = bcrypt.hashSync(password, 10);
 

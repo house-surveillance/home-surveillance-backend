@@ -31,7 +31,6 @@ export class RecognitionController {
     }
 
     const frontal = files[0];
-    console.log("🚀 ~ RecognitionController ~ frontal:", frontal)
     const rightProfile = files[1];
     const leftProfile = files[2];
     const fromAbove = files[3];
