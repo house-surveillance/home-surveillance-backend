@@ -9,6 +9,11 @@ import {
 import { User } from 'src/iam/domain/entities/user.entity';
 import { Profile } from 'src/iam/domain/entities/profile.entity';
 import { Residence } from 'src/iam/domain/entities/residence.entity';
+import { writeFileSync } from 'fs';
+import { join } from 'path';
+import { tmpdir } from 'os';
+import { generateUUID } from 'src/shared/utils/generators.util';
+import { CloudinaryService } from 'src/shared/cloudinary/cloudinary.service';
 
 @Injectable()
 export class UserService {
@@ -19,6 +24,8 @@ export class UserService {
     private readonly profileRepository: Repository<Profile>,
     @InjectRepository(Residence)
     private readonly residenceRepository: Repository<Residence>,
+
+    private readonly cloudinaryService: CloudinaryService,
   ) {}
 
   async getUsers(id: string) {
@@ -98,6 +105,55 @@ export class UserService {
   async updateProfile(id: number, data: any) {
     try {
       return await this.profileRepository.update(id, data);
+    } catch (error) {
+      console.log('Error:', error);
+      this.handleDBErrors(error);
+    }
+  }
+
+  async updateUserProfile(id: number, file, data: any) {
+    try {
+      let logoID;
+      let imageUrl;
+
+      const existingUser = await this.userRepository.findOne({
+        where: { id },
+        relations: ['profile'],
+      });
+      if (!existingUser) {
+        throw new NotFoundException('User not found');
+      }
+      if (file) {
+        const tempFilePath = join(tmpdir(), data.fullName);
+        writeFileSync(tempFilePath, file);
+
+        logoID = generateUUID();
+        imageUrl = await this.cloudinaryService.uploadFile({
+          tempFilePath,
+          logoID,
+        });
+      }
+
+      //editar el usuario
+      const auxProfile = {
+        fullName: data.fullName,
+      };
+
+      if (imageUrl) {
+        auxProfile['imageUrl'] = imageUrl;
+        auxProfile['imageId'] = logoID;
+      }
+
+      await this.profileRepository.update(existingUser.profile.id, {
+        ...auxProfile,
+        fullName: data.fullName,
+      });
+
+      await this.userRepository.update(id, {
+        userName: data.userName,
+        email: data.email,
+        roles: data.rolesArray,
+      });
     } catch (error) {
       console.log('Error:', error);
       this.handleDBErrors(error);

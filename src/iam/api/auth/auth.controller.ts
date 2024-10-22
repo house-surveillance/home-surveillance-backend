@@ -3,6 +3,7 @@ import {
   Controller,
   Get,
   Post,
+  Put,
   Req,
   UploadedFile,
   UseGuards,
@@ -77,6 +78,7 @@ export class AuthController {
       return error.message;
     }
   }
+
 
   // @Get('check-status')
   // @Auth()
